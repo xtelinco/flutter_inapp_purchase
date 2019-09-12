@@ -1,6 +1,6 @@
 #import "FlutterInappPurchasePlugin.h"
 
-@interface FlutterInappPurchasePlugin() {
+@interface FlutterInappPurchasePlugin() <FlutterStreamHandler> {
     BOOL autoReceiptConform;
     SKPaymentTransaction *currentTransaction;
     FlutterResult flutterResult;
@@ -11,7 +11,10 @@
 @property (atomic, retain) NSArray<SKProduct*>* products;
 @property (atomic, retain) NSMutableArray<SKProduct*>* appStoreInitiatedProducts;
 @property (atomic, retain) NSMutableSet<NSString*>* purchases;
+@property (atomic, retain) NSMutableArray<NSDictionary*>* externalPurchases;
+@property (copy, nonatomic)   FlutterEventSink   flutterEventSink;
 @property (nonatomic, retain) FlutterMethodChannel* channel;
+@property (nonatomic, retain) FlutterEventChannel* stream;
 
 @end
 
@@ -22,15 +25,21 @@
 @synthesize products;
 @synthesize appStoreInitiatedProducts;
 @synthesize purchases;
+@synthesize externalPurchases;
 @synthesize channel;
+@synthesize stream;
 
 + (void)registerWithRegistrar:(NSObject<FlutterPluginRegistrar>*)registrar {
     FlutterInappPurchasePlugin* instance = [[FlutterInappPurchasePlugin alloc] init];
     instance.channel = [FlutterMethodChannel
                         methodChannelWithName:@"flutter_inapp"
                         binaryMessenger:[registrar messenger]];
+    instance.stream = [FlutterEventChannel
+                        eventChannelWithName:@"flutter_inapp_stream"
+                        binaryMessenger:[registrar messenger]];
     [[SKPaymentQueue defaultQueue] addTransactionObserver:instance];
     [registrar addMethodCallDelegate:instance channel:instance.channel];
+    [instance.stream setStreamHandler:instance];
 }
 
 - (instancetype)init {
@@ -40,6 +49,7 @@
     self.products = [[NSArray alloc] init];
     self.appStoreInitiatedProducts = [[NSMutableArray alloc] init];
     self.purchases = [[NSMutableSet alloc] init];
+    self.externalPurchases = [[NSMutableArray alloc] init];
 
     return self;
 }
@@ -87,6 +97,9 @@
         result(@"Finished current transaction");
     } else if ([@"getAvailableItems" isEqualToString:call.method]) {
         [self getAvailableItems:result];
+    } else if ([@"externalPurchases" isEqualToString:call.method]) {
+        result( self.externalPurchases );
+        [self.externalPurchases removeAllObjects];
     } else if ([@"getAppStoreInitiatedProducts" isEqualToString:call.method]) {
         [self getAppStoreInitiatedProducts:result];
     } else {
@@ -291,14 +304,17 @@
                 NSLog(@"\n\n\n\n\n Purchase Successful !! \n\n\n\n\n.");
                 [self purchaseProcess:transaction];
                 break;
-            case SKPaymentTransactionStateRestored: // 기존 구매한 아이템 복구..
-                NSLog(@"Restored ");
+            case SKPaymentTransactionStateRestored: // Existing purchased item recovery
+                NSLog(@"Restore ");
                 [[SKPaymentQueue defaultQueue] finishTransaction:transaction];
                 break;
             case SKPaymentTransactionStateDeferred:
                 NSLog(@"Deferred (awaiting approval via parental controls, etc.)");
                 break;
             case SKPaymentTransactionStateFailed:
+                [[SKPaymentQueue defaultQueue] finishTransaction:transaction];
+                NSLog(@"\n\n\n\n\n\n Purchase Failed  !! \n\n\n\n\n");
+
                 if (result == nil) return;
                 [requestedPayments removeObjectForKey:transaction.payment];
 
@@ -307,7 +323,6 @@
                         message:[self englishErrorCodeDescription:(int)transaction.error.code]
                         details:nil
                 ]);
-                NSLog(@"\n\n\n\n\n\n Purchase Failed  !! \n\n\n\n\n");
                 break;
         }
     }
@@ -326,6 +341,11 @@
     if (result != nil) {
         result(purchase);
         [requestedPayments removeObjectForKey:transaction.payment];
+    }
+    if (self.flutterEventSink != nil) {
+      self.flutterEventSink( purchase );
+    } else {
+      [self.externalPurchases addObject:purchase];
     }
     [[SKPaymentQueue defaultQueue] finishTransaction:transaction];
 }
@@ -460,6 +480,16 @@
         return descriptions[code];
     else
         return [NSString stringWithFormat:@"%@ (Error code: %d)", descriptions[0], code];
+}
+
+-(FlutterError*)onListenWithArguments:(id)arguments eventSink:(FlutterEventSink)events {
+    self.flutterEventSink = events;
+    return nil;
+}
+
+-(FlutterError*)onCancelWithArguments:(id)arguments {
+    self.flutterEventSink = nil;
+    return nil;
 }
 
 @end

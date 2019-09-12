@@ -35,16 +35,20 @@ import java.util.Locale;
 import io.flutter.plugin.common.MethodCall;
 import io.flutter.plugin.common.MethodChannel;
 import io.flutter.plugin.common.MethodChannel.MethodCallHandler;
+import io.flutter.plugin.common.EventChannel;
+import io.flutter.plugin.common.EventChannel.EventSink;
+import io.flutter.plugin.common.EventChannel.StreamHandler;
 import io.flutter.plugin.common.MethodChannel.Result;
 import io.flutter.plugin.common.PluginRegistry.Registrar;
 
 /** AndroidInappPurchasePlugin */
-public class AndroidInappPurchasePlugin implements MethodCallHandler {
+public class AndroidInappPurchasePlugin implements MethodCallHandler, StreamHandler {
   public static Registrar reg;
   private final String TAG = "InappPurchasePlugin";
   private IInAppBillingService mService;
   private BillingClient mBillingClient;
   private Result result = null;
+  EventSink events;
 
   ServiceConnection mServiceConn = new ServiceConnection() {
     @Override public void onServiceDisconnected(ComponentName name) {
@@ -59,7 +63,12 @@ public class AndroidInappPurchasePlugin implements MethodCallHandler {
   /** Plugin registration. */
   public static void registerWith(Registrar registrar) {
     final MethodChannel channel = new MethodChannel(registrar.messenger(), "flutter_inapp");
-    channel.setMethodCallHandler(new FlutterInappPurchasePlugin());
+    final FlutterInappPurchasePlugin plugin = new FlutterInappPurchasePlugin();
+    channel.setMethodCallHandler(plugin);
+
+    final EventChannel eventChannel = new EventChannel(registrar.messenger(), "flutter_inapp_stream");
+    eventChannel.setStreamHandler(plugin);
+
     reg = registrar;
   }
 
@@ -188,7 +197,7 @@ public class AndroidInappPurchasePlugin implements MethodCallHandler {
           new SkuDetailsResponseListener() {
             @Override
             public void onSkuDetailsResponse(int responseCode, List<SkuDetails> skuDetailsList) {
-              Log.d(TAG, "responseCode: " + responseCode);
+              Log.e(TAG, "responseCode: " + responseCode);
               JSONArray items = new JSONArray();
               if (responseCode == BillingClient.BillingResponse.OK) {
                 try {
@@ -435,4 +444,15 @@ public class AndroidInappPurchasePlugin implements MethodCallHandler {
       }
     }
   };
+
+  @Override
+  public void onListen(Object arguments, final EventSink eventSink) {
+    events = eventSink;
+  }
+
+  @Override
+  public void onCancel(Object arguments) {
+    events = null;
+  }
+
 }

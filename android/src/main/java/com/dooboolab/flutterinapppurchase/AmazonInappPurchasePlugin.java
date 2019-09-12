@@ -30,14 +30,19 @@ import java.util.Set;
 import io.flutter.plugin.common.MethodCall;
 import io.flutter.plugin.common.MethodChannel;
 import io.flutter.plugin.common.MethodChannel.MethodCallHandler;
+import io.flutter.plugin.common.EventChannel;
+import io.flutter.plugin.common.EventChannel.EventSink;
+import io.flutter.plugin.common.EventChannel.StreamHandler;
 import io.flutter.plugin.common.MethodChannel.Result;
 import io.flutter.plugin.common.PluginRegistry.Registrar;
 
 /** AmazonInappPurchasePlugin */
-public class AmazonInappPurchasePlugin implements MethodCallHandler {
+public class AmazonInappPurchasePlugin implements MethodCallHandler, StreamHandler {
   public static Registrar reg;
   private final String TAG = "InappPurchasePlugin";
   private Result result = null;
+  EventSink events;
+
 
   /** Plugin registration. */
   public static void registerWith(Registrar registrar) {
@@ -266,4 +271,15 @@ public class AmazonInappPurchasePlugin implements MethodCallHandler {
     item.put("purchaseToken",null);
     return item;
   }
+
+  @Override
+  public void onListen(Object arguments, final EventSink eventSink) {
+    events = eventSink;
+  }
+
+  @Override
+  public void onCancel(Object arguments) {
+    events = null;
+  }
+
 }

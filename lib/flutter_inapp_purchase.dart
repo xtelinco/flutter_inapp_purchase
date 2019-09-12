@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io' show Platform;
 import 'package:http/http.dart' as http;
 
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import 'utils.dart';
@@ -19,6 +20,8 @@ class FlutterInappPurchase {
 
   /// Defining the [MethodChannel] for Flutter_Inapp_Purchase
   static const MethodChannel _channel = const MethodChannel('flutter_inapp');
+  static const EventChannel _stream = const EventChannel('flutter_inapp_stream');
+  static Stream<dynamic> _eventsFetch;
 
   /// Returns the platform version on `Android` and `iOS`.
   ///
@@ -165,17 +168,53 @@ class FlutterInappPurchase {
         code: Platform.operatingSystem, message: "platform not supported");
   }
 
+  static Future<List<PurchasedItem>> getExternalPurchases() async {
+    if (Platform.isAndroid) {
+      dynamic result1 = await _channel.invokeMethod(
+        'externalPurchases',
+      );
+
+      dynamic result2 = await _channel.invokeMethod(
+        'externalPurchases',
+      );
+
+      return extractPurchased(result1) + extractPurchased(result2);
+    } else if (Platform.isIOS) {
+      dynamic result = await _channel.invokeMethod('externalPurchases');
+
+      return extractPurchased(json.encode(result));
+    }
+    throw PlatformException(
+        code: Platform.operatingSystem, message: "platform not supported");
+  }
+
+  static Future<bool> registerExternalPurchaseHandler(Function(PurchasedItem item) callback) async {
+    WidgetsFlutterBinding.ensureInitialized();
+
+    if (_stream != null) {
+      _eventsFetch = _stream.receiveBroadcastStream();
+
+      await _eventsFetch.listen((dynamic v) {
+        final product = json.decode( json.encode(v) );
+        callback( PurchasedItem.fromJSON(product as Map<String, dynamic>) );
+      });
+    }
+    return Future.value(true);
+  }
+
+
   /// Get all non-consumed purchases made on `Android` and `iOS`.
   ///
   /// This is identical to [getPurchaseHistory] on `iOS`
   static Future<List<PurchasedItem>> getAvailablePurchases() async {
     if (Platform.isAndroid) {
+      /*
       dynamic result1 = await _channel.invokeMethod(
         'getAvailableItemsByType',
         <String, dynamic>{
           'type': _typeInApp[0],
         },
-      );
+      );*/
 
       dynamic result2 = await _channel.invokeMethod(
         'getAvailableItemsByType',
@@ -184,7 +223,9 @@ class FlutterInappPurchase {
         },
       );
 
-      return extractPurchased(result1) + extractPurchased(result2);
+
+
+      return /*extractPurchased(result1) +*/ extractPurchased(result2);
     } else if (Platform.isIOS) {
       dynamic result = await _channel.invokeMethod('getAvailableItems');
 

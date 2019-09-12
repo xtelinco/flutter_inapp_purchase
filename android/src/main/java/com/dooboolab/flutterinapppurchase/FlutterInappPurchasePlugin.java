@@ -6,14 +6,19 @@ import android.content.pm.PackageManager;
 import io.flutter.plugin.common.MethodCall;
 import io.flutter.plugin.common.MethodChannel;
 import io.flutter.plugin.common.MethodChannel.MethodCallHandler;
+import io.flutter.plugin.common.EventChannel;
+import io.flutter.plugin.common.EventChannel.EventSink;
+import io.flutter.plugin.common.EventChannel.StreamHandler;
 import io.flutter.plugin.common.MethodChannel.Result;
 import io.flutter.plugin.common.PluginRegistry.Registrar;
 
 /** FlutterInappPurchasePlugin */
-public class FlutterInappPurchasePlugin implements MethodCallHandler {
+public class FlutterInappPurchasePlugin implements MethodCallHandler, StreamHandler {
   static AndroidInappPurchasePlugin androidPlugin;
   static AmazonInappPurchasePlugin amazonPlugin;
   private static  Registrar mRegistrar;
+  EventSink events;
+
 
   FlutterInappPurchasePlugin() {
     androidPlugin = new AndroidInappPurchasePlugin();
@@ -48,4 +53,15 @@ public class FlutterInappPurchasePlugin implements MethodCallHandler {
     }
     return true;
   }
+
+  @Override
+  public void onListen(Object arguments, final EventSink eventSink) {
+    events = eventSink;
+  }
+
+  @Override
+  public void onCancel(Object arguments) {
+    events = null;
+  }
+
 }
